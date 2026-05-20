@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WeSafe KPI Dashboard — กฟจ.ลำพูน</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Sarabun',sans-serif;background:#f0f2f5;color:#1a1a2e}
+#root{min-height:100vh}
+.tbl{width:100%;border-collapse:collapse;font-size:14px;margin-bottom:4px}
+.tbl th{background:#1a237e;color:#fff;padding:7px 8px;font-weight:600;text-align:center;white-space:nowrap}
+.tbl td{padding:6px 8px;text-align:center;border-bottom:1px solid #e0e0e0}
+.tbl tr:hover td{background:#f5f5f5}
+.tbl .office{text-align:left;font-weight:600}
+.uz{border:3px dashed #bbb;border-radius:16px;padding:48px 32px;text-align:center;background:#fff;cursor:pointer;transition:all .3s}
+.uz:hover,.uz.dg{border-color:#1a237e;background:#e8eaf6}
+</style>
+</head>
+<body>
+<div id="root"><div style="display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:Sarabun,sans-serif;color:#888">กำลังโหลด...</div></div>
+<script>
+/*═══════════════════════════════════════════════════
+  🔧 FIREBASE CONFIG — แก้ไขค่าตรงนี้ให้ตรงกับ Firebase Project
+═══════════════════════════════════════════════════*/
+const firebaseConfig = {
+  apiKey: "AIzaSyCpvP_kiXuh9buY6MUaR3fXa-neUE44eXs",
+  authDomain: "wesafe-kpi.firebaseapp.com",
+  databaseURL: "https://wesafe-kpi-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "wesafe-kpi",
+  storageBucket: "wesafe-kpi.firebasestorage.app",
+  messagingSenderId: "310988832736",
+  appId: "1:310988832736:web:a2b80c275d6d4bf1497585"
+};
+
+// Database path
+const DB_ROOT = "wesafe-kpi";
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.database();
+
+// Detect public view mode: add ?view=1 to URL
+const isPublicView = new URLSearchParams(window.location.search).get("view") === "1";
+</script>
+<script type="text/babel">
+const {useState,useCallback,useMemo,useRef,useEffect}=React;
+
+/* ══ Icons ══ */
+const Svg=({paths,size=18,color="currentColor"})=><svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{paths.map((d,i)=><path key={i} d={d}/>)}</svg>;
+const IC={
+  upload:["M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4","M17 8l-5-5-5 5","M12 3v12"],
+  logout:["M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4","M16 17l5-5-5-5","M21 12H9"],
+  cDown:["M6 9l6 6 6-6"],cUp:["M18 15l-6-6-6 6"],cL:["M15 18l-6-6 6-6"],cR:["M9 18l6-6-6-6"],
+  chart:["M18 20V10","M12 20V4","M6 20v-6"],
+  edit:["M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7","M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"],
+  users:["M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2","M9 11a4 4 0 100-8 4 4 0 000 8z","M23 21v-2a4 4 0 00-3-3.87","M16 3.13a4 4 0 010 7.75"],
+  db:["M12 2C6.48 2 2 4.02 2 6.5v11C2 19.98 6.48 22 12 22s10-2.02 10-4.5v-11C22 4.02 17.52 2 12 2z"],
+  cal:["M19 4H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V6a2 2 0 00-2-2z","M16 2v4","M8 2v4","M3 10h18"],
+  save:["M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z","M17 21v-8H7v8","M7 3v5h8"],
+  check:["M22 11.08V12a10 10 0 11-5.93-9.14","M22 4L12 14.01l-3-3"],
+  trash:["M3 6h18","M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"],
+  userX:["M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2","M8.5 11a4 4 0 100-8 4 4 0 000 8z","M23 11h-6"],
+  x:["M18 6L6 18","M6 6l12 12"],
+  arrow:["M5 12h14","M12 5l7 7-7 7"],
+  file:["M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z","M14 2v6h6"],
+  clock:["M12 2a10 10 0 100 20 10 10 0 000-20z","M12 6v6l4 2"],
+  settings:["M12 15a3 3 0 100-6 3 3 0 000 6z","M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"],
+  link:["M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71","M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"],
+  eye:["M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z","M12 9a3 3 0 100 6 3 3 0 000-6z"],
+};
+const I=({n,size=18,color="currentColor"})=><Svg paths={IC[n]||[]} size={size} color={color}/>;
+
+/* ══ Constants ══ */
+const NM={"กฟจ.ลำพูน":"กฟจ.ลำพูน","กฟส.ป่าซาง":"กฟส.ป่าซาง","กฟส.บ้านโฮ่ง":"กฟส.บ้านโฮ่ง","กฟส.ลี้":"กฟส.ลี้","กฟส.บ้านธิ":"กฟส.บ้านธิ","กฟย.แม่ทา":"กฟส.แม่ทา","กฟย.นครเจดีย์":"กฟส.นครเจดีย์","กฟย.เวียงหนองล่อง":"กฟส.เวียงหนองล่อง","กฟย.ทุ่งหัวช้าง":"กฟส.ทุ่งหัวช้าง","กฟย.แม่ตืน":"กฟส.แม่ตืน"};
+const ALL=["กฟจ.ลำพูน","กฟส.ป่าซาง","กฟส.บ้านโฮ่ง","กฟส.ลี้","กฟส.บ้านธิ","กฟส.แม่ทา","กฟส.นครเจดีย์","กฟส.เวียงหนองล่อง","กฟส.ทุ่งหัวช้าง","กฟส.แม่ตืน"];
+const LS=ALL.slice(0,5),XSO=ALL.slice(5);
+const CSN=new Set(["ภูริช บุญยวง","ณัฐวุฒิ ไชยวรรณ","ธีรศักดิ์ ลังกาพิศาลพงษ์","ณัชพล โตน้อย","ภูริเดช ธรรมสิทธิ์","สันติ แสนหล้า","สุทธิพงศ์ วงค์แสน"]);
+const DEFPS={"กฟจ.ลำพูน":48,"กฟส.ป่าซาง":16,"กฟส.บ้านโฮ่ง":16,"กฟส.ลี้":16,"กฟส.บ้านธิ":16};
+const DEFWMS={"กฟจ.ลำพูน":52,"กฟส.ป่าซาง":18,"กฟส.บ้านโฮ่ง":17,"กฟส.ลี้":14,"กฟส.บ้านธิ":21};
+const XST=12,OMS_T="1. งานแก้ไฟฟ้าขัดข้อง";
+const TM=["","มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน","กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม"];
+const SM=["","ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
+const THR=[{v:.8,l:"ระดับ 1 (80%)",c:"#2196F3"},{v:.85,l:"ระดับ 2 (85%)",c:"#FF9800"},{v:.9,l:"ระดับ 3 (90%)",c:"#4CAF50"},{v:.95,l:"ระดับ 4 (95%)",c:"#F44336"},{v:1,l:"ระดับ 5 (100%)",c:"#2196F3"}];
+const SX=1.12;
+const ty=y=>y?y+543:"";
+const kl=k=>{if(k>=1)return 5;if(k>=.95)return 4;if(k>=.9)return 3;if(k>=.85)return 2;if(k>=.8)return 1;return 0;};
+const mkey=(y,m)=>y+"-"+String(m).padStart(2,"0");
+
+/* ══ Firebase Key Encoding (dots not allowed in keys) ══ */
+function encKeys(obj){if(!obj||typeof obj!=="object")return obj;if(Array.isArray(obj))return obj.map(encKeys);
+  const r={};for(const[k,v]of Object.entries(obj))r[k.replace(/\./g,"·")]=encKeys(v);return r;}
+function decKeys(obj){if(!obj||typeof obj!=="object")return obj;if(Array.isArray(obj))return obj.map(decKeys);
+  const r={};for(const[k,v]of Object.entries(obj))r[k.replace(/·/g,".")]=decKeys(v);return r;}
+
+/* ══ Firebase DB Helpers ══ */
+function fbSave(y,m,data){return db.ref(DB_ROOT+"/months/"+mkey(y,m)).set(encKeys(data));}
+function fbDel(y,m){return db.ref(DB_ROOT+"/months/"+mkey(y,m)).remove();}
+function fbSaveExcluded(list){return db.ref(DB_ROOT+"/excluded").set(list);}
+
+/* ══ File Processing ══ */
+function processFile(wb){
+  const sh=wb.Sheets[wb.SheetNames[0]];const raw=XLSX.utils.sheet_to_json(sh,{header:1});
+  let month=null,year=null,currentDay=null;
+  const f0=raw[0]?.[0]||"";const mM=f0.match(/Month\s+เป็น\s+(\d+)/);const yM=f0.match(/Year\s+เป็น\s+(\d+)/);
+  if(mM)month=parseInt(mM[1]);if(yM)year=parseInt(yM[1]);
+  let hi=-1;for(let i=0;i<Math.min(raw.length,10);i++){if(raw[i]?.includes?.("PEA_Name")||raw[i]?.[0]==="PEA_Name"){hi=i;break;}}
+  if(hi<0)return null;
+  const hdr=raw[hi];const cm={};hdr.forEach((h,i)=>{if(h)cm[String(h).trim()]=i;});
+  const ci={pea:cm["PEA_Name"]??0,type:cm["ประเภทงาน"]??4,sup:cm["ผู้ควบคุมงาน"]??9,date:cm["วันเวลา(เปิดงาน)"]??2};
+  const rows=raw.slice(hi+1).filter(r=>r[ci.pea]&&r[ci.pea]!=="PEA_Name");
+  if(!currentDay&&rows.length){let mx=0;rows.forEach(r=>{const dm=String(r[ci.date]||"").match(/(\d{2})\/\d{2}\/\d{4}/);if(dm)mx=Math.max(mx,parseInt(dm[1]));});currentDay=mx||(month&&year?new Date(year,month,0).getDate():30);}
+  const od={};ALL.forEach(o=>{od[o]={total:0,oms:0,pspm:0,wms:0};});
+  const pd={};
+  rows.forEach(r=>{
+    const pea=NM[String(r[ci.pea]||"").trim()]||String(r[ci.pea]||"").trim();
+    if(!od[pea])return;const jt=String(r[ci.type]||"").trim();const sup=String(r[ci.sup]||"").trim();
+    od[pea].total++;if(jt===OMS_T)od[pea].oms++;else if(CSN.has(sup))od[pea].pspm++;
+    const pk=pea+"|||"+sup;if(!pd[pk])pd[pk]={office:pea,name:sup,total:0,isCS:CSN.has(sup)};pd[pk].total++;
+  });
+  Object.values(od).forEach(d=>{d.wms=d.total-d.oms-d.pspm;});
+  return{officeData:od,personData:pd,month,year,currentDay,totalRows:rows.length};
+}
+function cLS(od,oT,pT,wT){return LS.map(o=>{const d=od[o];const p=pT[o]||16;const ot=Math.max(oT[o]||1,.01);const w=wT[o]||14;
+  const rP=Math.min((d.pspm/p)*.41,.41);const yP=Math.min((d.oms/ot)*.41,.41);const gP=Math.min((d.wms/w)*.21,.21);
+  return{office:o,rP,yP,gP,kpi:rP+yP+gP,pa:d.pspm,oa:d.oms,wa:d.wms,pT:p,oT:ot,wT:w};});}
+function cXS(od){return XSO.map(o=>{const t=od[o].total;const p=t/XST;return{office:o,target:XST,actual:t,pct:p,cap:Math.min(p,1)};});}
+
+/* ══ Charts ══ */
+function Lines({children}){return(<div style={{position:"relative"}}>{THR.map((t,i)=>{const lp=(t.v/SX)*100;return(
+  <div key={i} style={{position:"absolute",left:lp+"%",top:0,bottom:0,zIndex:2,pointerEvents:"none"}}>
+    <div style={{position:"absolute",top:60,bottom:0,borderLeft:"2.5px dashed "+t.c,width:0}}/>
+    <div style={{position:"absolute",top:44,left:-7,width:0,height:0,borderLeft:"7px solid transparent",borderRight:"7px solid transparent",borderTop:"10px solid "+t.c}}/>
+    <div style={{position:"absolute",top:4,left:6,whiteSpace:"nowrap",fontSize:12,fontWeight:700,color:t.c,transform:"rotate(-55deg)",transformOrigin:"bottom left"}}>{t.l}</div>
+  </div>);})}<div style={{paddingTop:68}}>{children}</div></div>);}
+function Bar({office,segs,txt,tc}){return(<div style={{display:"flex",alignItems:"center",marginBottom:14}}>
+  <div style={{width:140,flexShrink:0,textAlign:"right",paddingRight:14,fontWeight:700,fontSize:13,color:"#333"}}>{office}</div>
+  <div style={{flex:1}}><div style={{height:36,background:"#eee",borderRadius:4,display:"flex",overflow:"hidden"}}>
+    {segs.map((s,i)=>s.w>.3&&<div key={i} style={{width:s.w+"%",height:"100%",background:s.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:s.tc||"#fff"}}>{s.label}</div>)}
+  </div></div><div style={{width:90,flexShrink:0,paddingLeft:10,fontSize:14,fontWeight:800,color:tc}}>{txt}</div></div>);}
+function LSC({data}){return(<div><Lines>{data.map(d=>{const segs=[];
+  if(d.rP>.005)segs.push({w:(d.rP/SX)*100,bg:"#d32f2f",label:d.rP>=.05?(d.rP*100).toFixed(0)+"%":"",tc:"#fff"});
+  if(d.yP>.005)segs.push({w:(d.yP/SX)*100,bg:"#fbc02d",label:d.yP>=.05?(d.yP*100).toFixed(0)+"%":"",tc:"#333"});
+  if(d.gP>.005)segs.push({w:(d.gP/SX)*100,bg:"#2e7d32",label:d.gP>=.05?(d.gP*100).toFixed(0)+"%":"",tc:"#fff"});
+  return <Bar key={d.office} office={d.office} segs={segs} txt={(d.kpi*100).toFixed(2)+"%"} tc={d.kpi>=1?"#2e7d32":d.kpi>=.9?"#e65100":"#c62828"}/>;})}</Lines>
+  <div style={{display:"flex",gap:20,justifyContent:"center",marginTop:10,flexWrap:"wrap",fontSize:12}}>
+    {[["#d32f2f","ก่อสร้าง/ปรับปรุง (Max 41%)"],["#fbc02d","แก้ไฟฟ้าขัดข้อง (Max 41%)"],["#2e7d32","บำรุงรักษา/ตรวจสอบ (Max 21%)"]].map(([c,l])=>
+      <div key={l} style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:16,height:12,borderRadius:2,background:c}}/>{l}</div>)}</div></div>);}
+function XSC({data}){return(<Lines>{data.map(d=>{const w=(Math.min(d.pct,SX)/SX)*100;
+  return <Bar key={d.office} office={d.office} segs={[{w,bg:"linear-gradient(90deg,#1565c0,#42a5f5)",label:(d.pct*100).toFixed(0)+"%",tc:"#fff"}]} txt={(d.cap*100).toFixed(2)+"%"} tc={d.cap>=1?"#2e7d32":d.cap>=.9?"#e65100":"#c62828"}/>;})}</Lines>);}
+
+/* ══ Shared Dashboard View ══ */
+function Dash({data,oT,pT,wT}){
+  const od=data.officeData,mo=data.month,yr=data.year,cd=data.currentDay,tr=data.totalRows;
+  const mf=TM[mo]||"",yt=ty(yr);
+  const ls=useMemo(()=>cLS(od,oT,pT,wT),[od,oT,pT,wT]);
+  const xs=useMemo(()=>cXS(od),[od]);
+  return(<div>
+    <div style={{textAlign:"center",marginBottom:20}}>
+      <div style={{fontSize:20,fontWeight:700,color:"#1a237e"}}>สรุปสถานะเปิดใบงาน WeSafe เดือน {mf} {yt}</div>
+      <div style={{fontSize:14,color:"#555",marginTop:4}}>ณ วันที่ {cd} {mf} {yt} • ใบงาน {tr} รายการ</div></div>
+    <div style={{display:"flex",gap:12,marginBottom:20,flexWrap:"wrap"}}>
+      {[["#1565c0",tr,"ทั้งหมด"],["#d32f2f",LS.reduce((s,o)=>s+(od[o]?.pspm||0),0),"ก่อสร้าง"],["#f9a825",ALL.reduce((s,o)=>s+(od[o]?.oms||0),0),"แก้ไฟฟ้า"],["#2e7d32",LS.reduce((s,o)=>s+(od[o]?.wms||0),0),"บำรุงรักษา"]].map(([c,n,l])=>
+        <div key={l} style={{flex:1,minWidth:130,background:"#fff",borderRadius:10,padding:14,textAlign:"center",boxShadow:"0 2px 8px rgba(0,0,0,.06)",borderLeft:"4px solid "+c}}>
+          <div style={{fontSize:26,fontWeight:700}}>{n}</div><div style={{fontSize:11,color:"#777"}}>{l}</div></div>)}</div>
+    {/* LS */}
+    <div style={{background:"#fff",borderRadius:12,padding:24,marginBottom:20,boxShadow:"0 2px 8px rgba(0,0,0,.06)"}}>
+      <div style={{fontSize:16,fontWeight:700,color:"#1a237e",marginBottom:12,display:"flex",alignItems:"center",gap:8}}><I n="chart" size={18}/> กฟส. L, S</div>
+      <table className="tbl"><thead>
+        <tr><th rowSpan={2}>กฟส.</th><th colSpan={3} style={{background:"#37474f"}}>เป้าหมาย</th><th colSpan={3} style={{background:"#1b5e20"}}>ผลงาน</th><th rowSpan={2}>KPI</th></tr>
+        <tr><th style={{background:"#c62828"}}>PS/PM</th><th style={{background:"#f57f17",color:"#333"}}>OMS</th><th style={{background:"#1b5e20"}}>WMS</th><th style={{background:"#c62828"}}>PS/PM</th><th style={{background:"#f57f17",color:"#333"}}>OMS</th><th style={{background:"#1b5e20"}}>WMS</th></tr>
+      </thead><tbody>{ls.map(d=>{const lv=kl(d.kpi);return(<tr key={d.office}><td className="office">{d.office}</td>
+        <td style={{background:"#fff3e0"}}>{d.pT}</td><td style={{background:"#fff8e1",color:"#e65100",fontWeight:600}}>{d.oT}</td><td style={{background:"#e8f5e9"}}>{d.wT}</td>
+        <td style={{fontWeight:700,color:d.pa>=d.pT?"#2e7d32":"#c62828"}}>{d.pa}</td><td style={{fontWeight:700,color:d.oa>=d.oT?"#2e7d32":"#c62828"}}>{d.oa}</td><td style={{fontWeight:700,color:d.wa>=d.wT?"#2e7d32":"#c62828"}}>{d.wa}</td>
+        <td><span style={{background:lv>=4?"#c8e6c9":lv>=2?"#fff9c4":"#ffcdd2",padding:"3px 12px",borderRadius:12,fontWeight:700}}>{lv}</span></td></tr>);})}</tbody></table>
+      <div style={{fontSize:14,fontWeight:700,color:"#1a237e",marginBottom:4,marginTop:8}}>สถานะ : {cd} {mf} {yt}</div>
+      <LSC data={ls}/></div>
+    {/* XS */}
+    <div style={{background:"#fff",borderRadius:12,padding:24,marginBottom:20,boxShadow:"0 2px 8px rgba(0,0,0,.06)"}}>
+      <div style={{fontSize:16,fontWeight:700,color:"#1a237e",marginBottom:12,display:"flex",alignItems:"center",gap:8}}><I n="chart" size={18}/> กฟส. XS — เป้าหมาย {XST} ใบงาน/เดือน</div>
+      <table className="tbl"><thead><tr>{["กฟส.","เป้า","ผลงาน","%","Max","KPI"].map(h=><th key={h}>{h}</th>)}</tr></thead>
+      <tbody>{xs.map(d=>{const lv=kl(d.cap);return(<tr key={d.office}><td className="office">{d.office}</td><td>{d.target}</td>
+        <td style={{fontWeight:700,color:d.actual>=d.target?"#2e7d32":"#c62828"}}>{d.actual}</td><td style={{fontWeight:600}}>{(d.pct*100).toFixed(0)}%</td>
+        <td style={{fontWeight:700,color:d.cap>=1?"#2e7d32":"#c62828"}}>{(d.cap*100).toFixed(2)}%</td>
+        <td><span style={{background:lv>=4?"#c8e6c9":lv>=2?"#fff9c4":"#ffcdd2",padding:"3px 12px",borderRadius:12,fontWeight:700}}>{lv}</span></td></tr>);})}</tbody></table>
+      <div style={{fontSize:14,fontWeight:700,color:"#1a237e",marginBottom:4,marginTop:8}}>สถานะ : {cd} {mf} {yt}</div>
+      <XSC data={xs}/></div>
+  </div>);
+}
+
+/* ══ Person Table ══ */
+function Persons({data,excluded,onExclude,canDelete}){
+  const [filt,setFilt]=useState("all");
+  if(!data?.personData)return null;
+  const ps=Object.values(data.personData).filter(p=>!(excluded||[]).includes(p.office+"|||"+p.name)).sort((a,b)=>b.total-a.total);
+  const gr={};ALL.forEach(o=>{gr[o]=[];});ps.forEach(p=>{if(gr[p.office])gr[p.office].push(p);});
+  Object.values(gr).forEach(a=>a.sort((x,y)=>{if(x.isCS&&!y.isCS)return-1;if(!x.isCS&&y.isCS)return 1;return y.total-x.total;}));
+  const offices=filt==="all"?ALL:[filt];
+  return(<div>
+    <div style={{marginBottom:12}}><select value={filt} onChange={e=>setFilt(e.target.value)} style={{padding:"8px 12px",borderRadius:8,border:"1px solid #ccc",fontSize:14,fontFamily:"'Sarabun',sans-serif"}}>
+      <option value="all">ทุกหน่วยงาน</option>{ALL.map(o=><option key={o} value={o}>{o}</option>)}</select></div>
+    {offices.map(o=>{const arr=gr[o];if(!arr?.length)return null;const tot=arr.reduce((s,p)=>s+p.total,0);
+      return(<div key={o} style={{background:"#fff",borderRadius:10,padding:16,marginBottom:10,boxShadow:"0 2px 6px rgba(0,0,0,.04)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+          <div style={{width:5,height:28,borderRadius:3,background:LS.includes(o)?"#1a237e":"#1565c0"}}/>
+          <div><div style={{fontWeight:700,fontSize:15,color:"#1a237e"}}>{o}</div><div style={{fontSize:12,color:"#888"}}>{arr.length} คน • {tot} ใบงาน</div></div></div>
+        <div style={{overflowX:"auto"}}><table className="tbl" style={{fontSize:13}}><thead><tr>
+          <th style={{textAlign:"left"}}>#</th><th style={{textAlign:"left",minWidth:150}}>ชื่อ-สกุล</th><th>ประเภท</th><th style={{background:"#2e7d32"}}>จำนวน</th>
+          {canDelete&&<th style={{background:"#c62828",width:36}}>ลบ</th>}</tr></thead>
+        <tbody>{arr.map((p,i)=><tr key={p.name} style={{background:p.isCS?"#fff3e0":""}}>
+          <td style={{textAlign:"left",color:"#888"}}>{i+1}</td><td style={{textAlign:"left",fontWeight:600}}>{p.name}</td>
+          <td>{p.isCS?<span style={{fontSize:11,background:"#d32f2f",color:"#fff",padding:"2px 6px",borderRadius:8,fontWeight:600}}>ก่อสร้าง</span>:<span style={{fontSize:11,background:"#e8eaf6",padding:"2px 6px",borderRadius:8}}>ทั่วไป</span>}</td>
+          <td style={{fontWeight:700,color:"#1a237e"}}>{p.total}</td>
+          {canDelete&&<td><button onClick={()=>{if(confirm('ลบ "'+p.name+'"?'))onExclude(p.office+"|||"+p.name);}} style={{background:"none",border:"none",cursor:"pointer",color:"#c62828",padding:2}}><I n="userX" size={14}/></button></td>}
+        </tr>)}</tbody></table></div></div>);})}
+  </div>);
+}
+
+/* ══ Google Logo ══ */
+function GL(){return <svg viewBox="0 0 24 24" style={{width:20,height:20}}><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>;}
+
+/* ══════════════════════════════════════════════════════════
+   MAIN APP
+══════════════════════════════════════════════════════════ */
+function App(){
+  const [user,setUser]=useState(null);
+  const [authReady,setAuthReady]=useState(false);
+  const [page,setPage]=useState("import");
+  const [preview,setPreview]=useState(null);
+  const [fName,setFName]=useState("");
+  const [saved,setSaved]=useState(false);
+  const [omsT,setOmsT]=useState({"กฟจ.ลำพูน":31,"กฟส.ป่าซาง":8,"กฟส.บ้านโฮ่ง":6,"กฟส.ลี้":6,"กฟส.บ้านธิ":21});
+  const [psT,setPsT]=useState({...DEFPS});
+  const [wmsT,setWmsT]=useState({...DEFWMS});
+  const [allD,setAllD]=useState({});
+  const [excluded,setExcluded]=useState([]);
+  const [selY,setSelY]=useState(2026);
+  const [selM,setSelM]=useState(null);
+  const [sumTab,setSumTab]=useState("kpi");
+  const [drag,setDrag]=useState(false);
+  const [showCfg,setShowCfg]=useState(false);
+  const ref=useRef();
+
+  // Listen to auth
+  useEffect(()=>{const unsub=auth.onAuthStateChanged(u=>{setUser(u);setAuthReady(true);});return unsub;},[]);
+
+  // Listen to Firebase data — real-time sync
+  useEffect(()=>{
+    const mRef=db.ref(DB_ROOT+"/months");
+    mRef.on("value",snap=>{const val=snap.val();setAllD(val?decKeys(val):{});});
+    const eRef=db.ref(DB_ROOT+"/excluded");
+    eRef.on("value",snap=>{const val=snap.val();setExcluded(val||[]);});
+    return()=>{mRef.off();eRef.off();};
+  },[]);
+
+  const login=useCallback(()=>{auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());},[]);
+  const logout=useCallback(()=>{auth.signOut();},[]);
+
+  const readFile=useCallback(f=>{if(!f)return;const r=new FileReader();r.onload=e=>{try{const wb=XLSX.read(new Uint8Array(e.target.result),{type:"array"});const res=processFile(wb);if(res){setPreview(res);setFName(f.name);setSaved(false);}}catch(err){console.error(err);}};r.readAsArrayBuffer(f);},[]);
+
+  const handleConfirm=useCallback(()=>{if(!preview)return;
+    const obj={month:preview.month,year:preview.year,currentDay:preview.currentDay,totalRows:preview.totalRows,
+      officeData:preview.officeData,personData:preview.personData,omsTargets:{...omsT},psPmTargets:{...psT},wmsTargets:{...wmsT},
+      savedAt:new Date().toISOString(),savedBy:user?.displayName||user?.email||"unknown"};
+    fbSave(preview.year,preview.month,obj).then(()=>setSaved(true));
+  },[preview,omsT,psT,wmsT,user]);
+
+  const handleDelMonth=useCallback((y,m)=>{fbDel(y,m);if(selM===m)setSelM(null);},[selM]);
+  const handleExclude=useCallback(key=>{const next=[...excluded,key];setExcluded(next);fbSaveExcluded(next);},[excluded]);
+  const handleRestore=useCallback(key=>{const next=excluded.filter(k=>k!==key);setExcluded(next);fbSaveExcluded(next);},[excluded]);
+
+  const selData=useMemo(()=>selM?allD[mkey(selY,selM)]||null:null,[allD,selY,selM]);
+  const publicUrl=useMemo(()=>window.location.origin+window.location.pathname+"?view=1",[]);
+
+  // ═══════════════════ PUBLIC VIEW ═══════════════════
+  if(isPublicView){
+    const latestKey=Object.keys(allD).sort().pop();
+    const latest=latestKey?allD[latestKey]:null;
+    const [pSelY,setPSelY]=useState(2026);
+    const [pSelM,setPSelM]=useState(null);
+    const pData=pSelM?allD[mkey(pSelY,pSelM)]||null:latest;
+
+    return(<div style={{minHeight:"100vh"}}>
+      <div style={{background:"linear-gradient(135deg,#1a237e,#283593)",color:"#fff",padding:"14px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
+        <div style={{fontSize:18,fontWeight:600}}>⚡ WeSafe KPI Dashboard — กฟจ.ลำพูน</div>
+        <div style={{display:"flex",alignItems:"center",gap:6,fontSize:13,opacity:.8}}><I n="eye" size={14} color="#fff"/> โหมดดูอย่างเดียว (Real-time)</div>
+      </div>
+      <div style={{maxWidth:1200,margin:"0 auto",padding:24}}>
+        {/* Month selector */}
+        <div style={{background:"#fff",borderRadius:12,padding:20,marginBottom:20,boxShadow:"0 2px 8px rgba(0,0,0,.06)"}}>
+          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
+            <I n="cal" size={18} color="#1a237e"/>
+            <span style={{fontWeight:700,color:"#1a237e"}}>เลือกเดือน</span>
+            <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:8}}>
+              <button onClick={()=>setPSelY(y=>y-1)} style={{background:"none",border:"1px solid #ccc",borderRadius:6,padding:"4px 8px",cursor:"pointer"}}><I n="cL" size={14}/></button>
+              <span style={{fontWeight:700,minWidth:50,textAlign:"center"}}>{ty(pSelY)}</span>
+              <button onClick={()=>setPSelY(y=>y+1)} style={{background:"none",border:"1px solid #ccc",borderRadius:6,padding:"4px 8px",cursor:"pointer"}}><I n="cR" size={14}/></button>
+            </div>
+          </div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {Array.from({length:12},(_,i)=>{const m=i+1;const has=!!allD[mkey(pSelY,m)];const sel=pSelM===m;
+              return <div key={m} onClick={()=>{if(has)setPSelM(sel?null:m);}} style={{padding:"5px 12px",borderRadius:8,fontSize:13,fontWeight:600,cursor:has?"pointer":"default",
+                background:sel?"#1a237e":has?"#e8eaf6":"#f5f5f5",color:sel?"#fff":has?"#1a237e":"#ccc",border:sel?"2px solid #1a237e":"2px solid transparent"}}>{TM[m]}{has&&!sel?" ✓":""}</div>;})}
+          </div>
+        </div>
+        {pData?<div>
+          <Dash data={pData} oT={pData.omsTargets||omsT} pT={pData.psPmTargets||psT} wT={pData.wmsTargets||wmsT}/>
+          <div style={{background:"#fff",borderRadius:12,padding:24,marginBottom:20,boxShadow:"0 2px 8px rgba(0,0,0,.06)"}}>
+            <div style={{fontSize:16,fontWeight:700,color:"#1a237e",marginBottom:12}}><I n="users" size={18}/> รายบุคคล — {TM[pData.month]} {ty(pData.year)}</div>
+            <Persons data={pData} excluded={excluded} canDelete={false}/></div>
+          {/* Year overview */}
+          {Object.keys(allD).some(k=>k.startsWith(pSelY+"-"))&&<div style={{background:"#fff",borderRadius:12,padding:24,boxShadow:"0 2px 8px rgba(0,0,0,.06)"}}>
+            <div style={{fontSize:16,fontWeight:700,color:"#1a237e",marginBottom:16}}><I n="chart" size={18}/> ภาพรวม KPI ทั้งปี {ty(pSelY)}</div>
+            {Array.from({length:12},(_,i)=>{const m=i+1;const md=allD[mkey(pSelY,m)];if(!md)return null;
+              return <div key={m} style={{marginBottom:20,paddingBottom:16,borderBottom:"2px solid #e8eaf6"}}>
+                <div style={{fontWeight:700,fontSize:15,color:"#1a237e",marginBottom:6}}>● {TM[m]} {ty(pSelY)} <span style={{fontSize:12,color:"#888",fontWeight:400}}>({md.totalRows} ใบงาน)</span></div>
+                <div style={{fontSize:13,fontWeight:600,color:"#555",marginBottom:4}}>กฟส. L, S</div>
+                <LSC data={cLS(md.officeData,md.omsTargets||omsT,md.psPmTargets||psT,md.wmsTargets||wmsT)}/>
+                <div style={{fontSize:13,fontWeight:600,color:"#555",marginBottom:4,marginTop:8}}>กฟส. XS</div>
+                <XSC data={cXS(md.officeData)}/></div>;}).filter(Boolean)}
+          </div>}
+        </div>:<div style={{textAlign:"center",padding:60,color:"#888"}}><I n="clock" size={48} color="#ccc"/><div style={{marginTop:12}}>ยังไม่มีข้อมูล</div></div>}
+      </div>
+    </div>);
+  }
+
+  // ═══════════════════ AUTH CHECK ═══════════════════
+  if(!authReady)return <div style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100vh",fontSize:18,color:"#888"}}>กำลังโหลด...</div>;
+
+  if(!user)return(<div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(135deg,#1a237e,#0d47a1,#01579b)"}}>
+    <div style={{background:"#fff",borderRadius:16,padding:"48px 40px",width:420,maxWidth:"90vw",boxShadow:"0 20px 60px rgba(0,0,0,.3)",textAlign:"center"}}>
+      <div style={{fontSize:48,marginBottom:8}}>⚡</div>
+      <div style={{fontSize:28,fontWeight:700,color:"#1a237e",marginBottom:8}}>WeSafe KPI Dashboard</div>
+      <div style={{color:"#666",fontSize:14,marginBottom:32}}>ระบบติดตามผลงานการเปิดใบงาน WeSafe<br/>กฟจ.ลำพูน และ กฟส.ในสังกัด</div>
+      <button onClick={login} style={{display:"inline-flex",alignItems:"center",gap:12,padding:"12px 28px",border:"2px solid #dadce0",borderRadius:8,background:"#fff",cursor:"pointer",fontSize:16,fontWeight:500,fontFamily:"'Sarabun',sans-serif"}}><GL/> Sign in with Google</button>
+      <div style={{marginTop:24,fontSize:12,color:"#aaa"}}>สำหรับ จป.วิชาชีพ / ผู้ดูแลระบบ</div>
+    </div></div>);
+
+  // ═══════════════════ ADMIN DASHBOARD ═══════════════════
+  return(<div style={{minHeight:"100vh"}}>
+    <div style={{background:"#1a237e",color:"#fff",padding:"12px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100,boxShadow:"0 2px 8px rgba(0,0,0,.2)",flexWrap:"wrap",gap:8}}>
+      <div style={{fontSize:18,fontWeight:600}}>⚡ WeSafe KPI Dashboard</div>
+      <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+        {/* Public link */}
+        <button onClick={()=>{navigator.clipboard.writeText(publicUrl);alert("คัดลอก URL สำหรับแชร์แล้ว:\n"+publicUrl);}} style={{background:"rgba(255,255,255,.1)",border:"1px solid rgba(255,255,255,.3)",color:"#fff",padding:"5px 12px",borderRadius:6,cursor:"pointer",fontSize:12,fontFamily:"'Sarabun',sans-serif",display:"flex",alignItems:"center",gap:4}}><I n="link" size={13} color="#fff"/> ลิงก์สาธารณะ</button>
+        {user.photoURL&&<img src={user.photoURL} style={{width:28,height:28,borderRadius:"50%"}} referrerPolicy="no-referrer"/>}
+        <span style={{fontSize:13}}>{user.displayName||user.email}</span>
+        <button onClick={logout} style={{background:"none",border:"1px solid rgba(255,255,255,.3)",color:"#fff",padding:"5px 12px",borderRadius:6,cursor:"pointer",fontSize:13,fontFamily:"'Sarabun',sans-serif"}}><I n="logout" size={13} color="#fff"/> ออก</button>
+      </div>
+    </div>
+    <div style={{maxWidth:1200,margin:"0 auto",padding:24}}>
+      {/* Nav */}
+      <div style={{display:"flex",background:"#fff",borderRadius:12,boxShadow:"0 2px 8px rgba(0,0,0,.06)",marginBottom:24,overflow:"hidden"}}>
+        {[["import","นำเข้าข้อมูล","upload"],["summary","สรุปย้อนหลัง","db"]].map(([k,l,ic])=>
+          <button key={k} onClick={()=>setPage(k)} style={{flex:1,padding:"14px 16px",border:"none",cursor:"pointer",fontSize:15,fontWeight:600,fontFamily:"'Sarabun',sans-serif",display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:page===k?"#e8eaf6":"#fff",color:page===k?"#1a237e":"#555",borderBottom:page===k?"3px solid #1a237e":"3px solid transparent"}}><I n={ic} size={18}/>{l}</button>)}
+      </div>
+
+      {/* ═══ IMPORT ═══ */}
+      {page==="import"&&<div>
+        {!preview?<div>
+          {Object.keys(allD).length>0&&<div style={{background:"#e8eaf6",borderRadius:10,padding:12,marginBottom:16,fontSize:13,color:"#1a237e"}}><I n="db" size={14}/> มีข้อมูล {Object.keys(allD).length} เดือน</div>}
+          <div className={drag?"uz dg":"uz"} onDragOver={e=>{e.preventDefault();setDrag(true)}} onDragLeave={()=>setDrag(false)}
+            onDrop={e=>{e.preventDefault();setDrag(false);readFile(e.dataTransfer.files[0]);}} onClick={()=>ref.current?.click()}>
+            <div style={{color:"#9e9e9e",marginBottom:16}}><I n="upload" size={48}/></div>
+            <div style={{fontSize:20,fontWeight:600,marginBottom:8}}>อัปโหลดไฟล์ข้อมูล WeSafe</div>
+            <div style={{fontSize:14,color:"#888"}}>ลากไฟล์มาวาง หรือคลิกเลือก (.xlsx)</div>
+            <input ref={ref} type="file" accept=".xlsx,.xls" style={{display:"none"}} onChange={e=>readFile(e.target.files[0])}/></div>
+        </div>:<div>
+          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:16,flexWrap:"wrap"}}>
+            <I n="file" size={20} color="#1a237e"/><div><div style={{fontWeight:700,color:"#1a237e"}}>{fName}</div><div style={{fontSize:12,color:"#888"}}>{TM[preview.month]} {ty(preview.year)}</div></div>
+            <button onClick={()=>{setPreview(null);setSaved(false);}} style={{marginLeft:"auto",padding:"6px 16px",border:"1px solid #ccc",borderRadius:6,background:"#fff",cursor:"pointer",fontSize:13,fontFamily:"'Sarabun',sans-serif"}}>เปลี่ยนไฟล์</button></div>
+          {!saved?<div style={{background:"linear-gradient(135deg,#e8f5e9,#c8e6c9)",border:"2px solid #66bb6a",borderRadius:12,padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12,marginBottom:20}}>
+            <div><div style={{fontWeight:700,color:"#2e7d32",fontSize:16}}>ตรวจสอบข้อมูล</div><div style={{fontSize:13,color:"#555"}}>กรอก OMS แล้วกดยืนยัน</div></div>
+            <button onClick={handleConfirm} style={{padding:"10px 28px",background:"#2e7d32",color:"#fff",border:"none",borderRadius:8,cursor:"pointer",fontSize:15,fontWeight:700,fontFamily:"'Sarabun',sans-serif",display:"flex",alignItems:"center",gap:8}}><I n="save" size={16} color="#fff"/> ยืนยันบันทึก เดือน{TM[preview.month]}</button>
+          </div>:<div style={{background:"#e8f5e9",border:"2px solid #66bb6a",borderRadius:12,padding:16,marginBottom:20,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+            <I n="check" size={24} color="#2e7d32"/><div><div style={{fontWeight:700,color:"#2e7d32"}}>บันทึกเรียบร้อย!</div><div style={{fontSize:13,color:"#555"}}>{TM[preview.month]} {ty(preview.year)} — ข้อมูลอัปเดตแบบ real-time ทุกเครื่องแล้ว</div></div>
+            <button onClick={()=>setPage("summary")} style={{marginLeft:"auto",padding:"8px 20px",background:"#1a237e",color:"#fff",border:"none",borderRadius:8,cursor:"pointer",fontSize:14,fontWeight:600,fontFamily:"'Sarabun',sans-serif"}}>ไปดูข้อมูลย้อนหลัง →</button></div>}
+          {/* OMS input */}
+          <div style={{background:"linear-gradient(135deg,#fff8e1,#fff3e0)",border:"2px solid #ffe0b2",borderRadius:12,padding:16,marginBottom:20}}>
+            <div style={{fontSize:15,fontWeight:700,color:"#e65100",marginBottom:10}}><I n="edit" size={16}/> เป้าหมาย OMS (กรอกใหม่ทุกเดือน)</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(190px,1fr))",gap:8}}>
+              {LS.map(o=><div key={o} style={{background:"#fff",border:"1px solid #ffe0b2",borderRadius:8,padding:"8px 12px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <div><div style={{fontSize:13,fontWeight:600}}>{o}</div><div style={{fontSize:11,color:"#aaa"}}>ผลงาน: {preview.officeData[o]?.oms||0}</div></div>
+                <input type="number" value={omsT[o]||""} onChange={e=>{const v={...omsT};v[o]=parseFloat(e.target.value)||0;setOmsT(v);}} style={{width:60,padding:"5px 6px",border:"2px solid #ffe0b2",borderRadius:6,fontSize:14,textAlign:"center",fontFamily:"'Sarabun',sans-serif",fontWeight:700,color:"#e65100",background:"#fffde7"}}/></div>)}</div></div>
+          <Dash data={preview} oT={omsT} pT={psT} wT={wmsT}/>
+          <div style={{background:"#fff",borderRadius:12,padding:24,marginBottom:20,boxShadow:"0 2px 8px rgba(0,0,0,.06)"}}>
+            <div style={{fontSize:16,fontWeight:700,color:"#1a237e",marginBottom:12}}><I n="users" size={18}/> รายบุคคล</div>
+            <Persons data={preview} excluded={excluded} onExclude={handleExclude} canDelete={true}/></div>
+        </div>}
+      </div>}
+
+      {/* ═══ SUMMARY ═══ */}
+      {page==="summary"&&<div>
+        {excluded.length>0&&<div style={{background:"#fff3e0",border:"1px solid #ffe0b2",borderRadius:8,padding:"10px 16px",marginBottom:16,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",fontSize:13}}>
+          <I n="userX" size={14} color="#e65100"/><span style={{fontWeight:600,color:"#e65100"}}>ลบแล้ว ({excluded.length}):</span>
+          {excluded.map(ek=><span key={ek} style={{background:"#ffccbc",padding:"3px 10px",borderRadius:6,fontSize:12,fontWeight:600,color:"#bf360c",display:"inline-flex",alignItems:"center",gap:4}}>{ek.split("|||")[1]}
+            <button onClick={()=>handleRestore(ek)} style={{background:"none",border:"none",cursor:"pointer",color:"#bf360c",padding:0}}><I n="x" size={12}/></button></span>)}</div>}
+        {/* Year/Month */}
+        <div style={{background:"#fff",borderRadius:12,padding:20,marginBottom:16,boxShadow:"0 2px 8px rgba(0,0,0,.06)"}}>
+          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
+            <I n="cal" size={18} color="#1a237e"/><span style={{fontWeight:700,fontSize:18,color:"#1a237e"}}>เลือกปี / เดือน</span>
+            <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:8}}>
+              <button onClick={()=>setSelY(y=>y-1)} style={{background:"none",border:"1px solid #ccc",borderRadius:6,padding:"4px 8px",cursor:"pointer"}}><I n="cL" size={14}/></button>
+              <span style={{fontWeight:700,fontSize:18,minWidth:60,textAlign:"center"}}>{ty(selY)}</span>
+              <button onClick={()=>setSelY(y=>y+1)} style={{background:"none",border:"1px solid #ccc",borderRadius:6,padding:"4px 8px",cursor:"pointer"}}><I n="cR" size={14}/></button></div></div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            {Array.from({length:12},(_,i)=>{const m=i+1;const has=!!allD[mkey(selY,m)];const sel=selM===m;
+              return <div key={m} onClick={()=>{if(has)setSelM(sel?null:m);}} style={{padding:"6px 14px",borderRadius:8,fontSize:13,fontWeight:600,cursor:has?"pointer":"default",background:sel?"#1a237e":has?"#e8eaf6":"#f5f5f5",color:sel?"#fff":has?"#1a237e":"#bbb",border:sel?"2px solid #1a237e":"2px solid transparent"}}>{TM[m]}{has&&!sel?" ✓":""}</div>;})}
+          </div></div>
+        {/* Selected month */}
+        {selData&&<div>
+          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:16}}>
+            <span style={{fontWeight:700,fontSize:18,color:"#1a237e"}}>{TM[selM]} {ty(selY)}</span>
+            {selData.savedBy&&<span style={{fontSize:12,color:"#888"}}>บันทึกโดย {selData.savedBy}</span>}
+            <button onClick={()=>{if(confirm("ลบ "+TM[selM]+" "+ty(selY)+"?"))handleDelMonth(selY,selM);}} style={{marginLeft:"auto",padding:"6px 14px",border:"1px solid #e57373",borderRadius:6,background:"#fff",color:"#c62828",cursor:"pointer",fontSize:13,fontFamily:"'Sarabun',sans-serif"}}><I n="trash" size={13}/> ลบ</button></div>
+          <div style={{display:"flex",gap:4,background:"#e8eaf6",borderRadius:10,padding:4,marginBottom:20}}>
+            {[["kpi","ภาพรวม KPI","chart"],["persons","รายบุคคล","users"]].map(([k,l,ic])=>
+              <button key={k} onClick={()=>setSumTab(k)} style={{flex:1,padding:10,border:"none",borderRadius:8,cursor:"pointer",fontSize:14,fontWeight:600,fontFamily:"'Sarabun',sans-serif",display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:sumTab===k?"#1a237e":"transparent",color:sumTab===k?"#fff":"#555"}}><I n={ic} size={16}/>{l}</button>)}</div>
+          {sumTab==="kpi"&&<Dash data={selData} oT={selData.omsTargets||omsT} pT={selData.psPmTargets||psT} wT={selData.wmsTargets||wmsT}/>}
+          {sumTab==="persons"&&<div style={{background:"#fff",borderRadius:12,padding:24,marginBottom:20,boxShadow:"0 2px 8px rgba(0,0,0,.06)"}}>
+            <Persons data={selData} excluded={excluded} onExclude={handleExclude} canDelete={true}/></div>}
+        </div>}
+        {/* Year overview */}
+        {Object.keys(allD).some(k=>k.startsWith(selY+"-"))&&<div style={{background:"#fff",borderRadius:12,padding:24,marginBottom:20,boxShadow:"0 2px 8px rgba(0,0,0,.06)"}}>
+          <div style={{fontSize:16,fontWeight:700,color:"#1a237e",marginBottom:16}}><I n="chart" size={18}/> ภาพรวม KPI ทั้งปี {ty(selY)}</div>
+          {Array.from({length:12},(_,i)=>{const m=i+1;const md=allD[mkey(selY,m)];if(!md)return null;
+            return <div key={m} style={{marginBottom:20,paddingBottom:16,borderBottom:"2px solid #e8eaf6"}}>
+              <div style={{fontWeight:700,fontSize:15,color:"#1a237e",marginBottom:6}}>● {TM[m]} {ty(selY)} <span style={{fontSize:12,color:"#888",fontWeight:400}}>({md.totalRows} ใบงาน)</span></div>
+              <div style={{fontSize:13,fontWeight:600,color:"#555",marginBottom:4}}>กฟส. L, S</div>
+              <LSC data={cLS(md.officeData,md.omsTargets||omsT,md.psPmTargets||psT,md.wmsTargets||wmsT)}/>
+              <div style={{fontSize:13,fontWeight:600,color:"#555",marginBottom:4,marginTop:8}}>กฟส. XS</div>
+              <XSC data={cXS(md.officeData)}/></div>;}).filter(Boolean)}
+        </div>}
+      </div>}
+    </div>
+  </div>);
+}
+
+ReactDOM.render(<App/>,document.getElementById("root"));
+</script>
+</body>
+</html>
