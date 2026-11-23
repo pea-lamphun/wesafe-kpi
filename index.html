@@ -110,6 +110,11 @@ const I=({n,size=18,color="currentColor"})=><Svg paths={IC[n]||[]} size={size} c
 
 /* ══ Constants ══ */
 const NM={"กฟจ.ลำพูน":"กฟจ.ลำพูน","กฟส.ป่าซาง":"กฟส.ป่าซาง","กฟส.บ้านโฮ่ง":"กฟส.บ้านโฮ่ง","กฟส.ลี้":"กฟส.ลี้","กฟส.บ้านธิ":"กฟส.บ้านธิ","กฟย.แม่ทา":"กฟส.แม่ทา","กฟย.นครเจดีย์":"กฟส.นครเจดีย์","กฟย.เวียงหนองล่อง":"กฟส.เวียงหนองล่อง","กฟย.ทุ่งหัวช้าง":"กฟส.ทุ่งหัวช้าง","กฟย.แม่ตืน":"กฟส.แม่ตืน"};
+
+/* จับชื่อหน่วยโดยไม่สนคำนำหน้า (กฟจ./กฟส./กฟอ./กฟย.) — รองรับส่วนกลางเปลี่ยนชื่อย่อ */
+const bareN=s=>String(s||"").replace(/[\u200b\u200c\u200d\ufeff]/g,"").trim().replace(/\s+/g," ").replace(/^กฟ[จสอย]\.\s*/,"");
+const NMB={};Object.entries(NM).forEach(([k,v])=>{const b=bareN(k);if(b)NMB[b]=v;});
+const mapPea=s=>{const t=String(s||"").trim();return NM[t]||NMB[bareN(t)]||t;};
 const ALL=["กฟจ.ลำพูน","กฟส.ป่าซาง","กฟส.บ้านโฮ่ง","กฟส.ลี้","กฟส.บ้านธิ","กฟส.แม่ทา","กฟส.นครเจดีย์","กฟส.เวียงหนองล่อง","กฟส.ทุ่งหัวช้าง","กฟส.แม่ตืน"];
 const LS=ALL.slice(0,5),XSO=ALL.slice(5);
 let CSN=new Set();
@@ -130,8 +135,12 @@ const mkey=(y,m)=>y+"-"+String(m).padStart(2,"0");
 /* ══ Firebase Helpers ══ */
 function encKeys(obj){if(!obj||typeof obj!=="object")return obj;if(Array.isArray(obj))return obj.map(encKeys);
   const r={};for(const[k,v]of Object.entries(obj))r[k.replace(/\./g,"·")]=encKeys(v);return r;}
-function decKeys(obj){if(!obj||typeof obj!=="object")return obj;if(Array.isArray(obj))return obj.map(decKeys);
-  const r={};for(const[k,v]of Object.entries(obj))r[k.replace(/·/g,".")]=decKeys(v);return r;}
+/* ชื่อหน่วยที่เปลี่ยนชื่อแสดงผล: แปลงข้อมูลเก่าที่บันทึกไว้เป็นชื่อใหม่ตอนโหลด */
+const RENAME={};
+const renK=k=>{for(const a in RENAME){if(k===a)return RENAME[a];if(k.startsWith(a+"|||"))return RENAME[a]+k.slice(a.length);}return k;};
+function decKeys(obj){if(typeof obj==="string")return renK(obj);if(!obj||typeof obj!=="object")return obj;if(Array.isArray(obj))return obj.map(decKeys);
+  const r={},mv=[];for(const[k,v]of Object.entries(obj)){const dk=k.replace(/·/g,".");const nk=renK(dk);if(nk!==dk)mv.push([nk,decKeys(v)]);else r[dk]=decKeys(v);}
+  mv.forEach(([k,v])=>{if(!(k in r))r[k]=v;});return r;}
 function fbSave(y,m,data){return db.ref(DB_ROOT+"/months/"+mkey(y,m)).set(encKeys(data));}
 function fbDel(y,m){return db.ref(DB_ROOT+"/months/"+mkey(y,m)).remove();}
 function fbSaveExcluded(obj){return db.ref(DB_ROOT+"/excluded").set(obj?encKeys(obj):{});}
@@ -241,7 +250,7 @@ function processFile(wb){
   const od={};ALL.forEach(o=>{od[o]={total:0,oms:0,pspm:0,wms:0};});
   const pd={};
   rows.forEach(r=>{
-    const pea=NM[String(r[ci.pea]||"").trim()]||String(r[ci.pea]||"").trim();
+    const pea=mapPea(r[ci.pea]);
     if(!od[pea])return;const jt=String(r[ci.type]||"").trim();const sup=String(r[ci.sup]||"").trim();
     const isHL=HOTLINE.has(norm(sup));
     if(!isHL){od[pea].total++;if(jt===OMS_T)od[pea].oms++;else if(CSN.has(norm(sup)))od[pea].pspm++;}
