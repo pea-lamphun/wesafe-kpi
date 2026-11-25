@@ -174,6 +174,8 @@ function getPosRank(pos){if(!pos)return{rank:99,num:0};const p=pos.trim();
 const DEPT_ORDER=["กฟจ.ลำพูน","ผกส.","ผปบ.","ผมต.","ผบร.","ผบส.","ผสน.","ผคพ.","ผบง.","กฟส.ป่าซาง","กฟส.บ้านโฮ่ง","กฟส.ลี้","กฟส.บ้านธิ","กฟส.แม่ทา","กฟส.นครเจดีย์","กฟส.เวียงหนองล่อง","กฟส.ทุ่งหัวช้าง","กฟส.แม่ตืน","ผปร.","ผบค."];
 function deptOrder(dept){const i=DEPT_ORDER.indexOf((dept||"").trim());return i>=0?i:500;}
 function sortPersonnel(list){return[...list].sort((a,b)=>{const gA=getGroup(a.position),gB=getGroup(b.position);if(gA!==gB)return gA-gB;const dA=deptOrder(a.department),dB=deptOrder(b.department);if(dA!==dB)return dA-dB;const pA=getPosRank(a.position),pB=getPosRank(b.position);if(pA.rank!==pB.rank)return pA.rank-pB.rank;if(pA.num!==pB.num){if(pA.rank===30)return pA.num-pB.num;return pB.num-pA.num;}return(a.fullName||"").localeCompare(b.fullName||"","th");});}
+// เรียงรายบุคคล (แดชบอร์ด "เรียงตามสังกัด" + PDF ใช้ตัวเดียวกัน): ก่อสร้างก่อนทั้งกลุ่ม → สังกัด → ตำแหน่ง → ชื่อ
+function sortDashPersons(list){return[...list].sort((a,b)=>{if(a.isCS&&!b.isCS)return-1;if(!a.isCS&&b.isCS)return 1;const dA=deptOrder(a.department),dB=deptOrder(b.department);if(dA!==dB)return dA-dB;const pA=getPosRank(a.position),pB=getPosRank(b.position);if(pA.rank!==pB.rank)return pA.rank-pB.rank;if(pA.num!==pB.num)return pB.num-pA.num;return(a.displayName||a.name||"").localeCompare(b.displayName||b.name||"","th");});}
 function nkey(s){return norm(stripPrefix(s)).toLowerCase().normalize("NFC");}
 function fkey(s){const n=nkey(s).replace(/\*+/g,"").trim();const parts=n.split(" ");if(parts.length<2||!parts[0])return null;const last=parts.slice(1).join("");if(last.length<2)return null;return parts[0]+"|"+last.slice(0,2);}
 function buildPersonnelMap(pList){
@@ -664,13 +666,8 @@ function Persons({allData,year,currentMonth,excluded,onExclude,onFullExclude,can
         return{...p,position:info.position,department:info.department,displayName,office};
       });
       if(sortMode==="dept"){
-        // Sort by dept → isCS first → position → name
-        persons.sort((a,b)=>{
-          const dA=deptOrder(a.department),dB=deptOrder(b.department);if(dA!==dB)return dA-dB;
-          if(a.isCS&&!b.isCS)return-1;if(!a.isCS&&b.isCS)return 1;
-          const pA=getPosRank(a.position),pB=getPosRank(b.position);if(pA.rank!==pB.rank)return pA.rank-pB.rank;
-          if(pA.num!==pB.num)return pB.num-pA.num;
-          return(a.displayName||a.name||"").localeCompare(b.displayName||b.name||"","th");});
+        // ก่อสร้างอยู่บนสุดติดกัน → สังกัด → ตำแหน่ง → ชื่อ (ตัวเดียวกับ PDF)
+        persons=sortDashPersons(persons);
       }else{
         persons.sort((a,b)=>{
           if(a.isCS&&!b.isCS)return-1;if(!a.isCS&&b.isCS)return 1;
@@ -880,7 +877,7 @@ function App(){
             // เพิ่มคนในทะเบียนที่ยังไม่มีใบงาน (สาขานี้) → ขึ้น 0
             {const shownP=new Set();Object.values(pds).forEach(p=>{const rp=matchPersonnel(pMap,p.name);if(rp)shownP.add(nkey(rp.fullName||""));});((pMap&&pMap.list)||[]).forEach(rp=>{if(rp.office!==office)return;const nm=(rp.fullName||"").trim();if(!nm)return;if(isFullyExcluded(excluded,office,nm))return;const k=nkey(nm);if(shownP.has(k))return;if(!pds[nm]){pds[nm]={name:nm,isCS:CSN.has(norm(nm)),months:{}};shownP.add(k);}});}
             let persons=Object.values(pds).map(p=>{const info=getPersonnelInfo(p.name,pMap);const dn=getDisplayName(p.name,pMap);return{...p,position:info.position,department:info.department,displayName:dn,fullName:dn};});
-            persons=sortPersonnel(persons);
+            persons=sortDashPersons(persons);
             if(!persons.length)return;
             h+='<div style="margin-bottom:14px"><div style="font-weight:700;font-size:14px;color:#1a237e;margin-bottom:6px;border-left:4px solid #1a237e;padding-left:8px">'+office+' ('+persons.length+' คน)</div>';
             h+='<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="background:#1a237e;color:#fff">';
